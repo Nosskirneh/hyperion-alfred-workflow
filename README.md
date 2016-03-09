@@ -1,12 +1,12 @@
 # Hyperion Controller for Alfred 2
 
-> Quickly control your LED-strip connected to hyperion with Alfred through SSH.
+> Quickly control your LED-strip connected to hyperion with Alfred through [hyperionweb.go](https://github.com/Nosskirneh/hyperionweb).
 
 ![Index](/screenshots/index.png)
 ![Effects](/screenshots/effects.png)
 
 ## Installation
-1. **[Download the workflow](https://github.com/Nosskirneh/hyperion-alfred-workflow/releases/download/v1.0/Hyperion.Controller.alfredworkflow)**.
+1. **[Download the workflow](https://github.com/Nosskirneh/hyperion-alfred-workflow/releases/download/v1.1/Hyperion.Controller.alfredworkflow)**.
 
 2. Configure the IP and user to the remote machine at the first lines located in hyperion.sh
 
