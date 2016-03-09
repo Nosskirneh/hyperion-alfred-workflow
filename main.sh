@@ -51,7 +51,6 @@ elif [[ ${arg1} == "level" ]]; then # Level items
 
 elif [[ ${arg1} == "effect" ]]; then # Effect items
 	./hyperion.sh --fetchEffects > /dev/null 2>&1
-	sed -i '' s/\"//g effects.txt # without quotes
 	length=$(wc -l < "effects.txt")
 	for (( n=1; n<=$length; n++))
 	do
@@ -59,8 +58,8 @@ elif [[ ${arg1} == "effect" ]]; then # Effect items
 		addResult "uid" "--effectNum="$n"" "$effect" "" "icons/effect_128.png" "yes" "effect "$effect""
 	done
 	
-elif [[ ${arg1} == "colorlist" ]]; then # Colorlist items
-	#./hyperion.sh --fetchColors > /dev/null 2>&1 # not working
+ elif [[ ${arg1} == "colorlist" ]]; then # Colorlist items
+	./hyperion.sh --fetchColors > /dev/null 2>&1
 	for color in $(<colors.txt); do
 		if [[ ${color} == ${arg2}* ]]; then
 			addResult ""${color}"" "-c "${color}"" ""${color}"" "" "icons/color_128.png" "yes" "color "${color}""

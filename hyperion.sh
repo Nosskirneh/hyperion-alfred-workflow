@@ -1,69 +1,27 @@
 #!/bin/bash
 # Init
-ip="192.168.0.120"
-user="root"
+ip="mydomain.com"
+user="myUser"
 port="22"
 ssh="ssh $user@$ip -p $port"
-pri="0" # Hyperion iOS app uses priority 0
 remote="-t hyperion-remote"
 service="hyperion"
 
-# Output colors
-red='\033[0;31m'
-nc='\033[0m' # No color
-u_yellow='\e[4;33m'
-yellow='\e[0;33m'
-
-
-
-# No touching below this point
-debugString="+debug"
-debug="0"
-if [ "${@: -1}" == "${debugString}" ]; then
-	debug="1"
-	printf "############### debug FLAG DETECTED! ###############\n"
-	printf "# ip: "${yellow}"$ip"${nc}"                                #\n"
-	printf "# port: "${yellow}"$port"${nc}"                                         #\n"
-	printf "# user: "${yellow}"$user"${nc}"                                       #\n"
-	printf "# service: "${yellow}"$service"${nc}"                                #\n"
-	printf "# priority: "${yellow}""${pri}""${nc}" (lower number => higher priority)    #\n"
-	printf "####################################################\n\n"
-fi
-
-
 function level {
-	if [[ "${OPTARG}" =~ ^[0-9]* ]] && (( "${OPTARG}" >= 0 && "${OPTARG}" <= 10 )); then # between [0-10]
-		result=$(echo ""${OPTARG}"/10" | bc -l)
-		printf "Setting the level to "${OPTARG}"\n\n"
-
-		cmd=""${ssh}" "${remote}" -v "${result}""
-		if [[ "${debug}" == 1 ]]; then
-			printf "\n"${u_yellow}"[DEBUG] Returned from host:"${nc}"\n"
-			${cmd}
-			printf ""${yellow}"[DEBUG] End of log."${nc}"\n"
-		else
-			${cmd} > /dev/null 2>&1
-		fi
-
+	if [[ "${2}" =~ ^[0-9]* ]] && ! [[ "${2}" == [a-zA-Z] ]] && (( "${2}" >= 0 && "${2}" <= 10 ));
+	then # between [0-10]
+		printf "Setting the level to "${2}"\n\n"
+		echo $result
+		curl --request POST "${ip}:1234/set_value_gain" --data "valueGain=${2}"
 	else
 	    printf ""${red}"Error: Not a valid number (0-10)"${nc}"\n"; exit 1
 	fi
 }
 
-
-
-### COLORS ###
+## Colors
 function color {
-		cmd=""${ssh}" "${remote}" -c "${OPTARG}" -p "${pri}""
-		printf "Setting the color to "${OPTARG}"\n\n"
-
-		if [[ ${debug} == 1 ]]; then
-			printf "\n"${u_yellow}"[DEBUG] Returned from host:"${nc}"\n"
-			${cmd}
-			printf ""${yellow}"[DEBUG] End of log."${nc}"\n"
-		else
-			${cmd} > /dev/null 2>&1
-		fi
+	curl --request POST "${ip}:1234/set_color_name" --data "colorName=${2}"
+	printf "\nSetting the color to ${2}\n\n"
 }
 
 function fetchColors {
@@ -72,8 +30,26 @@ function fetchColors {
 	${ssh} ${remote} "$( cat <<EOF
 		-c --list
 EOF
-)" 2>/dev/null | tail -n +2 | sed 's/^ *//' | tr -d '\r' > colors.txt # (tail) Removes the error output (1st line), (sed) removes the space on every new line, (tr) removes Windows line endings.
+)" 2>/dev/null | tail -n +2 | sed 's/^ *//' | tr -d '\r' > colors.txt
+# tail: Removes the error output (1st line),
+# sed: removes the space on every new line,
+# tr: removes Windows line endings.
 	length=$(wc -l < "${file}.txt")
+}
+
+function colorRGB {
+	if [[ "${2}" =~ ^[0-9]* ]] && ! [[ "${2}" == [a-zA-Z] ]] &&
+		(( "${2}" >= 0 && "${2}" <= 255 )) &&
+		[[ "${3}" =~ ^[0-9]* ]] && ! [[ "${3}" == [a-zA-Z] ]] &&
+		(( "${3}" >= 0 && "${3}" <= 255 )) &&
+		[[ "${4}" =~ ^[0-9]* ]] && ! [[ "${4}" == [a-zA-Z] ]] &&
+		(( "${4}" >= 0 && "${4}" <= 255 )); then
+		printf "\ntest\n\n"
+		curl --request POST "${ip}:1234/set_static" --data "r=${2}&g=${3}&b=${4}"
+		printf "\nSetting the color to ${2} ${3} ${4}\n\n"
+	else
+	    printf ""${red}"Error: Not a valid number (0-255)"${nc}"\n"; exit 1
+	fi
 }
 
 function colorlist {
@@ -84,18 +60,11 @@ function colorlist {
 	while true; do
 	    read -p "What color would you like? " num
 	    size=${#num}
-	    if [[ $size > 0 ]] && [[ ${num} =~ ^[0-9]* ]] && (( ${num} >= 1 )) && (( ${num} <= $length )); then
+	    if [[ $size > 0 ]] && [[ ${num} =~ ^[0-9]* ]] &&
+	    	(( ${num} >= 1 )) && (( ${num} <= $length )); then
 	        color=$(parseFile ${num})
 	        printf "You choose: "${color}"\n\n"
-
-			cmd=""${ssh}" "${remote}" -c "${color}" -p "${pri}""
-			if [[ ${debug} == 1 ]]; then
-				printf "\n"${u_yellow}"[DEBUG] Returned from host:"${nc}"\n"
-				${cmd}
-				printf ""${yellow}"[DEBUG] End of log."${nc}"\n"
-			else
-				${cmd} > /dev/null 2>&1
-			fi
+			curl --request POST "${ip}:1234/set_color_name" --data "colorName=${color}"
 
 	    else
 	        printf ""${red}"Error: Could not find color number "${num}""${nc}"\n\n"
@@ -103,53 +72,34 @@ function colorlist {
 	done
 }
 
-function colorNum () {
+function colorNum {
 	fetchColors > /dev/null 2>&1
     if [[ ${val} =~ ^[0-9]* ]] && (( ${val} >= 1 )) && (( ${val} <= ${length} )); then
         color=$(parseFile ${val})
         printf "You choose: "${color}"\n"
-		cmd=""${ssh}" "${remote}" -c "${color}" -p "${pri}""
-		echo ${cmd}
-		if [[ ${debug} == 1 ]]; then
-			printf "\n"${u_yellow}"[DEBUG] Returned from host:"${nc}"\n"
-			${cmd}
-			printf ""${yellow}"[DEBUG] End of log."${nc}"\n"
-		else
-			${cmd} > /dev/null 2>&1
-		fi
+		curl --request POST "${ip}:1234/set_color_name" --data "colorName=${color}"
 
     else
         printf ""${red}"Error: Could not find color number ${num}"${nc}"\n\n"
     fi
 }
 
-
-
-
-
-### EFFECTS ###
+## Effects
 function effect {
-	fetchEffects > /dev/null 2>&1
-
-	    printf "You choose: "${OPTARG}"\n\n"
-		cmd=""${ssh}" "${remote}" -e '""${OPTARG}""' -p "${pri}""
-		if [[ ${debug} == 1 ]]; then
-			printf "\n"${u_yellow}"[DEBUG] Returned from host:"${nc}"\n"
-			${cmd}
-			printf ""${yellow}"[DEBUG] End of log."${nc}"\n"
-		else
-			${cmd} > /dev/null 2>&1
-		fi
+	curl --request POST "${ip}:1234/set_effect" --data "effect=${2}"
+	printf "\nYou choose: "${OPTARG}"\n"
 }
 
 function fetchEffects {
 	file="effects"
-	printf "Fetching effects...\n"
+	printf "\nFetching effects...\n"
 	${ssh} ${remote} "$( cat <<EOF
 		-l | grep -v hostname | grep name
 EOF
-)" 2>/dev/null | sed s/'         "name"'// | tr -d "\,:" | sed 's/^ *//' | tr -d '\r' > effects.txt
-# First part removes some spacing and the "name". The second removes the commas and the third removes the space on every new line
+)" 2>/dev/null | sed s/'         "name"'// | tr -d "\,\":" | sed 's/^ *//' | tr -d '\r'>effects.txt
+# First part removes some spacing and the "name".
+# The second removes the commas and the third removes the space on every new line
+
 	length=$(wc -l < "${file}.txt")
 }
 
@@ -157,26 +107,21 @@ function effectlist {
 	fetchEffects > /dev/null 2>&1
 	printf "\n\n"
 	cat -n effects.txt # prints numbers on each line
-	printf "\n\n"
 
 
 	# Choose a line
 	while true; do
+		printf "\n\n"
 	    read -p "What effect would you like? " num
 	    size=${#num}
-	    if [[ $size > 0 ]] && [[ ${num} =~ ^[0-9]* ]] && (( ${num} >= 1 )) && (( ${num} <= ${length} )); then
+	    if [[ $size > 0 ]] && [[ ${num} =~ ^[0-9]* ]] &&
+	    	(( ${num} >= 1 )) && (( ${num} <= ${length} )); then
 	        effect=$(parseFile ${num})
-	        printf "You choose: "${effect}"\n\n"
 
-			cmd=""${ssh}" "${remote}" -e "${effect}" -p "${pri}""
-			if [[ ${debug} == 1 ]]; then
-				printf "\n"${u_yellow}"[DEBUG] Returned from host:"${nc}"\n"
-				${cmd}
-				printf "$"{yellow}"[DEBUG] End of log."${nc}"\n"
-			else
-				${cmd} > /dev/null 2>&1
-			fi
-
+	        #send string with spaces
+	        IFS=$'\n'; array=($(echo $effect | egrep -o '"[^"]*"|\S+'))
+	        printf "You choose: "$effect"\n\n"
+			curl --request POST "${ip}:1234/set_effect" --data "effect="${effect}""
 	    else
 	        printf ""${red}"Error: Could not find effect number ${num}"${nc}"\n\n"
 	    fi
@@ -184,112 +129,60 @@ function effectlist {
 
 }
 
-function effectNum () {
+function effectNum {
 	fetchEffects > /dev/null 2>&1
     if [[ $val =~ ^[0-9]* ]] && (( ${val} >= 1 )) && (( ${val} <= ${length} )); then
         effect=$(parseFile ${val})
-        printf "You choose: "${effect}"\n"
-
-		cmd=""${ssh}" "${remote}" -e "${effect}" -p "${pri}""
-		if [[ ${debug} == 1 ]]; then
-			printf "\n"${u_yellow}"[DEBUG] Returned from host:"${nc}"\n"
-			${cmd}
-			printf ""${yellow}"[DEBUG] End of log."${nc}"\n"
-		else
-			${cmd} > /dev/null 2>&1
-		fi
-
+        printf "\nYou choose: "${effect}"\n"
+		curl --request POST "${ip}:1234/set_effect" --data "effect=${effect}"
     else
         printf ""${red}"Error: Could not find effect number ${num}"${nc}"\n\n"
     fi
 }
 
-
 # Help function
-function parseFile () {
+function parseFile {
 	cat $file.txt | head -"$1" | tail -1
 }
 
 
-
-
-
-
-### OTHER TOOLS ###
 function clear {
-	cmd=""${ssh}" "${remote}" --clearall"
-	if [[ ${debug} == 1 ]]; then
-		printf "\n"${u_yellow}"[DEBUG] Returned from host:"${nc}"\n"
-		${cmd}
-		printf ""${yellow}"[DEBUG] End of log."${nc}"\n"
-	else
-		${cmd} > /dev/null 2>&1
-	fi
+	curl --request POST "${ip}:1234/do_clear" --data "clear=clear"
 	printf "Cleared all priority channels\n"
 }
 
-function start {
-	${ssh} <<EOF > /dev/null 2>&1
-	[ -f /storage/.cache/services/$service.disabled ] && mv /storage/.cache/services/$service.disabled /storage/.cache/services/$service.conf
-	[ ! -f /storage/.cache/services/$service.conf ] && touch /storage/.cache/services/$service.conf
-	systemctl start $service
-EOF
-
-	printf ""${service}" started\n"
-}
-
-
-function stop {
-	${ssh} <<EOF > /dev/null 2>&1
-		/storage/hyperion/bin/hyperion-remote.sh --priority 0 --color black && sleep 1 && systemctl stop $service
-		[ -f /storage/.cache/services/$service.conf ] && mv /storage/.cache/services/$service.conf /storage/.cache/services/$service.disabled
-EOF
-
-	printf ""${service}" stopped\n"
-}
-
-
 function restart {
-	${ssh} <<EOF > /dev/null 2>&1
-	systemctl stop $service
-	[ -f /storage/.cache/services/$service.conf ] && mv /storage/.cache/services/$service.conf /storage/.cache/services/$service.disabled
-
-	# Starting again...
-	[ -f /storage/.cache/services/$service.disabled ] && mv /storage/.cache/services/$service.disabled /storage/.cache/services/$service.conf
-	[ ! -f /storage/.cache/services/$service.conf ] && touch /storage/.cache/services/$service.conf
-	systemctl start $service
-EOF
-
+	curl --request POST "${ip}:1234/do_restart" --data "restart=restart"
 	printf ""${service}" restarted\n"
 }
 
+function start {
+	curl --request POST "${ip}:1234/do_start" --data "start=start"
+	printf ""${service}" started\n"
+}
+
+function stop {
+	curl --request POST "${ip}:1234/do_stop" --data "stop=stop"
+	printf ""${service}" stopped\n"
+}
 
 function usage {
     cat <<EOF
-    This script controls LEDS through the Hyperion service.
+    This script controls LEDS via the Hyperion Web UI service.
     Usage: $0 <arguments>
 
     OPTIONS:
-       Commonly used tools:
        -h      Show this message.
-       -c      Choose a color of your choice either by name or by HEX code.
+       -c      Choose a color of your choice by RBG code.
        -v      Choose a power level (0-10).
-       -e      Choose an effect by its name (use quotation marks).
+       -x      Clear all channels.
 
        Other tools:
-       -x      Clear all channels.
+       -r      Restarts the $service service.
        -s      Starts the $service service.
        -p      Stops the $service service.
-       -r      Restarts the $service service.
-
-       Special tools:
-       --effectlist		Choose an effect from a list of all possible effects available.
-       --effectNum=(value)	Choose an effect directly by its number in the list of `printf "\e[3m--effectlist\e[0m"`.
-       --colorlist		Choose a color from a list all possible colors available.
-       --colorNum=(value)	Choose an effect by its number in the list of `printf "\e[3m--colorlist\e[0m"`.
 EOF
 }
-
 
 optspec="hxspr-:c:v:e:"
 while getopts "${optspec}" optchar; do
@@ -299,11 +192,11 @@ while getopts "${optspec}" optchar; do
 		   usage
 		   exit 1 ;;
 
-		c) color "${OPTARG}" ;;
+		c) color ${@} ;;
 
-		v) level "${OPTARG}" ;;
+		v) level ${@} ;;
 
-		e) effect "${OPTARG}" ;;
+		e) effect ${@} ;;
 
 		x) clear ;;
 
@@ -328,7 +221,12 @@ while getopts "${optspec}" optchar; do
 					fetchEffects
                     val="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
                     ;;
+                    
 
+				colorRGB)
+					echo $@
+					colorRGB ${@}
+					;;
 
                 colorlist)
 					colorlist
@@ -338,10 +236,13 @@ while getopts "${optspec}" optchar; do
                 colorNum)
                     val="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
                     fetchColors
-				    if [[ ${val} > 0 ]] && [[ ${val} =~ ^[0-9]* ]] && (( ${val} >= 1 )) && (( ${val} <= ${length} )); then
-                    	printf "\n"${red}"You have to write \""${nc}"--${OPTARG}=${val}"${red}"\"!"${nc}"\n\n" >&2;
+				    if [[ ${val} > 0 ]] && [[ ${val} =~ ^[0-9]* ]] &&
+				    	(( ${val} >= 1 )) && (( ${val} <= ${length} )); then
+                    	printf "\n"${red}"You have to write \""${nc}"
+                    		--${OPTARG}=${val}"${red}"\"!"${nc}"\n\n" >&2;
                 	else
-                		printf "\n"${red}"You have to write \""${nc}"--${OPTARG}=(value)"${red}"\"!"${nc}"\n\n" >&2;
+                		printf "\n"${red}"You have to write \""${nc}"
+                			--${OPTARG}=(value)"${red}"\"!"${nc}"\n\n" >&2;
                 	fi
                     ;;
 
@@ -351,21 +252,9 @@ while getopts "${optspec}" optchar; do
 					colorNum ${val}
                     ;;
 
-
-
                 effectlist)
 					effectlist
                     val="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
-                    ;;
-
-                effectNum)
-                    val="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
-                    fetchEffects
-				    if [[ $size > 0 ]] && [[ ${val} =~ ^[0-9]* ]] && (( ${val} >= 1 )) && (( ${val} <= ${length} )); then
-                    	printf "\n"${red}"You have to write \""${nc}"--${OPTARG}=${val}"${red}"\"!"${nc}"\n\n" >&2;
-                	else
-                		printf "\n"${red}"You have to write \""${nc}"--${OPTARG}=(value)"${red}"\"!"${nc}"\n\n" >&2;
-                	fi
                     ;;
 
                 effectNum=*) # effectNum with argument
@@ -373,7 +262,6 @@ while getopts "${optspec}" optchar; do
                     opt=${OPTARG%=$val}
 					effectNum ${val}
                     ;;
-
 
                 *)
                     if [ "$OPTERR" = 1 ] && [ "${optspec:0:1}" != ":" ]; then
@@ -383,15 +271,9 @@ while getopts "${optspec}" optchar; do
             esac;;
 
         *)
-            if [ "$OPTERR" != 1 ] || [ "${optspec:0:1}" = ":" ]; then
-				printf "Non-option argument: '-${OPTARG}'" >&2
-				usage
-				exit 1
-            fi
+			usage
+			exit 1
             ;;
-
 	esac
 done
-
-
 exit 0
